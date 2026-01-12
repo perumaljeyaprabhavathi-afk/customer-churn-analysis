@@ -1,0 +1,572 @@
+
+
+#import data
+"""
+
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+df = pd.read_csv('retaildata.csv')
+
+df.head()
+
+#Added markdown block explaining churn definition criteria
+
+print("Added markdown block explaining churn definition criteria.")
+
+#Converting Date
+
+df['Date_of_Purchase'] = pd.to_datetime(df['Date_of_Purchase'], format='%d/%m/%Y')
+print("Converted 'Date_of_Purchase' to datetime format.")
+
+latest_purchase_date = df['Date_of_Purchase'].max()
+print(f"The latest purchase date in the dataset is: {latest_purchase_date.strftime('%Y-%m-%d')}")
+
+from datetime import timedelta
+
+churn_threshold_days = 90 # Define churn as no purchase in the last 90 days
+churn_cutoff_date = latest_purchase_date - timedelta(days=churn_threshold_days)
+
+print(f"Customers with a last purchase before {churn_cutoff_date.strftime('%Y-%m-%d')} will be considered churned (based on a {churn_threshold_days}-day threshold).")
+
+df['Is_Churned'] = df['Date_of_Purchase'] < churn_cutoff_date
+print("Added 'Is_Churned' column to the DataFrame.")
+
+"""## Identify Churned Customers
+
+"""
+
+customer_last_purchase = df.groupby('Customer_ID')['Date_of_Purchase'].max().reset_index()
+print("Calculated each customer's last purchase date.")
+
+customer_last_purchase['is_churned_customer'] = customer_last_purchase['Date_of_Purchase'] < churn_cutoff_date
+print("Added 'is_churned_customer' column to the customer_last_purchase DataFrame.")
+
+total_customers = len(customer_last_purchase)
+churned_customers_count = customer_last_purchase['is_churned_customer'].sum()
+churn_rate = (churned_customers_count / total_customers) * 100
+
+print(f"Total customers: {total_customers}")
+print(f"Number of churned customers: {churned_customers_count}")
+print(f"Churn Rate: {churn_rate:.2f}%")
+
+"""## Determine Analysis Period
+
+Establishing a start and end date for the churn analysis to define the baseline 'total customers at the start' and the 'customers lost' within that period.
+
+"""
+
+from datetime import timedelta
+
+analysis_duration_months = 6 # Define the duration for the analysis period in months
+
+end_of_analysis_period = latest_purchase_date
+start_of_analysis_period = end_of_analysis_period - pd.DateOffset(months=analysis_duration_months)
+
+print(f"Analysis Period Start: {start_of_analysis_period.strftime('%Y-%m-%d')}")
+print(f"Analysis Period End: {end_of_analysis_period.strftime('%Y-%m-%d')}")
+
+customers_at_start = df[df['Date_of_Purchase'] <= start_of_analysis_period]['Customer_ID'].unique()
+print(f"Number of customers active at the start of the analysis period ({start_of_analysis_period.strftime('%Y-%m-%d')}): {len(customers_at_start)}")
+
+customers_at_end = df[df['Date_of_Purchase'] <= end_of_analysis_period]['Customer_ID'].unique()
+print(f"Number of customers active at the end of the analysis period ({end_of_analysis_period.strftime('%Y-%m-%d')}): {len(customers_at_end)}")
+
+customers_lost = set(customers_at_start) - set(customers_at_end)
+print(f"Number of customers lost during the analysis period: {len(customers_lost)}")
+
+"""## Calculate Churn Rate
+
+Implementing the Python code to calculate the churn rate by dividing the number of identified churned customers by the total number of customers at the start of the period, then multiplying by 100.
+
+"""
+
+churn_rate_period = (len(customers_lost) / len(customers_at_start)) * 100
+print(f"Churn rate for the defined analysis period: {churn_rate_period:.2f}%")
+
+"""## Interpret Churn Rate
+
+
+A clear and concise interpretation of the calculated churn rate, explaining what the percentage signifies in the context of the dataset.
+
+"""
+
+y = df['Is_Churned']
+
+numerical_features = ['Age', 'Purchase_Amount', 'Satisfaction_Score']
+categorical_features = ['Gender', 'Product_Category', 'Payment_Method', 'Loyalty_Member']
+
+X_numerical = df[numerical_features]
+X_categorical = pd.get_dummies(df[categorical_features], drop_first=True)
+
+X = pd.concat([X_numerical, X_categorical], axis=1)
+
+print("Defined target variable 'y' and prepared feature DataFrame 'X' with one-hot encoded categorical variables.")
+print(f"Shape of X: {X.shape}")
+print(f"Shape of y: {y.shape}")
+
+"""## Split Data into Training and Testing Sets
+
+
+Divide the preprocessed data into training and testing sets to evaluate the model's performance.
+
+"""
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+print("Data successfully split into training and testing sets.")
+print(f"Shape of X_train: {X_train.shape}")
+print(f"Shape of X_test: {X_test.shape}")
+print(f"Shape of y_train: {y_train.shape}")
+print(f"Shape of y_test: {y_test.shape}")
+
+"""## Train Logistic Regression Model
+
+
+Instantiate and train a logistic regression model using the training data.
+
+"""
+
+from sklearn.linear_model import LogisticRegression
+
+# Instantiate the Logistic Regression model
+model = LogisticRegression(random_state=42, solver='liblinear')
+
+# Train the model using the training data
+model.fit(X_train, y_train)
+
+print("Logistic Regression model instantiated and trained successfully.")
+
+"""## Evaluate Model Performance
+
+### Subtask:
+Assess the model's performance using appropriate metrics on the test set.
+
+"""
+
+from sklearn.metrics import accuracy_score
+
+y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f"Model Accuracy on the test set: {accuracy:.2f}")
+
+"""## Extract Regression Output and Key Findings
+
+Retrieve the model coefficients and identify which factors most influence churn.
+
+"""
+
+coefficients = model.coef_[0]
+feature_names = X.columns
+
+# Create a DataFrame to store feature and coefficient values
+coefficient_df = pd.DataFrame({'Feature': feature_names, 'Coefficient': coefficients})
+
+# Sort the DataFrame by the absolute value of the coefficient in descending order
+coefficient_df['Abs_Coefficient'] = abs(coefficient_df['Coefficient'])
+coefficient_df = coefficient_df.sort_values(by='Abs_Coefficient', ascending=False).drop(columns=['Abs_Coefficient'])
+
+print("Most influential factors (sorted by absolute coefficient value):")
+print(coefficient_df)
+
+"""## Calculate Odds Ratios and Confidence Intervals
+
+
+Compute odds ratios and their 95% confidence intervals to understand the strength and reliability of predictors.
+
+## Calculate Odds Ratios and Confidence Intervals
+
+
+Compute odds ratios and their 95% confidence intervals to understand the strength and reliability of predictors.
+"""
+
+import statsmodels.api as sm
+import numpy as np
+
+# Convert boolean target variable to integer (0 or 1)
+y_train_numeric = y_train.astype(int)
+
+# Convert boolean columns in X_train to integer (0 or 1)
+X_train_numeric = X_train.copy()
+for col in X_train_numeric.select_dtypes(include='bool').columns:
+    X_train_numeric[col] = X_train_numeric[col].astype(int)
+
+X_train_const = sm.add_constant(X_train_numeric)
+
+logit_model = sm.Logit(y_train_numeric, X_train_const)
+logit_results = logit_model.fit()
+
+conf_int = logit_results.conf_int(alpha=0.05)
+odds_ratios = np.exp(logit_results.params)
+
+print("Calculated odds ratios and their 95% confidence intervals.")
+print("Odds Ratios:\n", odds_ratios)
+print("\n95% Confidence Intervals:\n", conf_int)
+
+"""## Calculate Performance Metrics
+
+
+Compute additional evaluation metrics such as precision, recall, F1 score, and ROC-AUC to comprehensively assess the churn prediction model's performance on the test set.
+
+"""
+
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+
+# Calculate Precision
+precision = precision_score(y_test, y_pred)
+
+# Calculate Recall
+recall = recall_score(y_test, y_pred)
+
+# Calculate F1-Score
+f1 = f1_score(y_test, y_pred)
+
+# Calculate ROC-AUC
+y_pred_proba = model.predict_proba(X_test)[:, 1] # Probability of the positive class (churned)
+roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+print(f"Precision: {precision:.2f}")
+print(f"Recall: {recall:.2f}")
+print(f"F1-Score: {f1:.2f}")
+print(f"ROC-AUC: {roc_auc:.2f}")
+
+"""## Visualize Satisfaction Score Distribution
+
+Create a visualization (e.g., bar plot or histogram) to show the frequency of each satisfaction score.
+
+"""
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(8, 6))
+sns.countplot(x='Satisfaction_Score', data=df, palette='viridis')
+plt.title('Distribution of Customer Satisfaction Scores')
+plt.xlabel('Satisfaction Score')
+plt.ylabel('Count')
+plt.show()
+print("Generated a countplot showing the distribution of customer satisfaction scores.")
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(8, 6))
+sns.countplot(x='Satisfaction_Score', data=df, palette='viridis', hue='Satisfaction_Score', legend=False)
+plt.title('Distribution of Customer Satisfaction Scores')
+plt.xlabel('Satisfaction Score')
+plt.ylabel('Count')
+plt.show()
+print("Generated a countplot showing the distribution of customer satisfaction scores.")
+
+"""## Analyze Satisfaction Score Distribution
+
+### Subtask:
+Interpret the visual output to identify patterns such as high dissatisfaction rates, large neutral segments, or predominant satisfaction levels.
+
+"""
+
+loyalty_members = df[df['Loyalty_Member'] == 'Yes']
+non_loyalty_members = df[df['Loyalty_Member'] == 'No']
+
+loyalty_satisfaction_scores = loyalty_members['Satisfaction_Score']
+non_loyalty_satisfaction_scores = non_loyalty_members['Satisfaction_Score']
+
+print("Successfully separated loyalty and non-loyalty members and extracted their satisfaction scores.")
+print(f"Number of loyalty members: {len(loyalty_members)}")
+print(f"Number of non-loyalty members: {len(non_loyalty_members)}")
+
+"""## Calculate Class Distribution of 'Is_Churned'
+Calculate the class distribution of the 'Is_Churned' target variable to understand the extent of class imbalance.
+
+"""
+
+if df is not None:
+    print("Class distribution of 'Is_Churned' (count):")
+    print(df['Is_Churned'].value_counts())
+    print("\nClass distribution of 'Is_Churned' (percentage):")
+    print(df['Is_Churned'].value_counts(normalize=True) * 100)
+else:
+    print("DataFrame 'df' is not loaded. Cannot calculate class distribution.")
+
+"""## Calculate Class Distribution of 'Is_Churned'
+
+### Subtask:
+Calculate the class distribution of the 'Is_Churned' target variable to understand the extent of class imbalance.
+
+## Descriptive Statistics
+
+Calculate and display descriptive statistics for numerical features and value counts for categorical features to understand data distributions.
+"""
+
+import numpy as np
+
+# Identify numerical columns and display descriptive statistics
+numerical_cols = df.select_dtypes(include=np.number).columns
+print("Descriptive statistics for numerical features:\n")
+print(df[numerical_cols].describe())
+print("\n" + "-"*50 + "\n")
+
+# Identify categorical columns
+categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+
+# Display value counts for each categorical column
+print("Value counts for categorical features:\n")
+for col in categorical_cols:
+    print(f"Value counts for '{col}':")
+    print(df[col].value_counts())
+    print("\n")
+
+"""## Implement SMOTE and Confirm Balanced Classes
+
+Implement the SMOTE (Synthetic Minority Over-sampling Technique) resampling method to balance the classes of the target variable and then print the class distribution of the resampled data to confirm that the classes are now balanced.
+
+"""
+
+from imblearn.over_sampling import SMOTE
+import pandas as pd
+
+# Ensure df is properly initialized with 'Is_Churned' column by loading from 'retaildata.csv'
+df = pd.read_csv('retaildata.csv')
+df['Date_of_Purchase'] = pd.to_datetime(df['Date_of_Purchase'], format='%d/%m/%Y')
+
+latest_purchase_date = df['Date_of_Purchase'].max()
+churn_threshold_days = 90 # Define churn as no purchase in the last 90 days
+churn_cutoff_date = latest_purchase_date - pd.Timedelta(days=churn_threshold_days)
+df['Is_Churned'] = df['Date_of_Purchase'] < churn_cutoff_date
+
+# Redefine X and y based on previous steps
+y = df['Is_Churned']
+
+numerical_features = ['Age', 'Purchase_Amount', 'Satisfaction_Score']
+categorical_features = ['Gender', 'Product_Category', 'Payment_Method', 'Loyalty_Member']
+
+X_numerical = df[numerical_features]
+X_categorical = pd.get_dummies(df[categorical_features], drop_first=True)
+
+X = pd.concat([X_numerical, X_categorical], axis=1)
+
+# Convert boolean target variable to integer (0 or 1) for SMOTE
+y_numeric = y.astype(int)
+
+# Instantiate SMOTE
+sm = SMOTE(random_state=42)
+
+# Apply SMOTE to the data
+X_resampled, y_resampled = sm.fit_resample(X, y_numeric)
+
+print("Original class distribution:")
+print(y_numeric.value_counts())
+print("\nResampled class distribution:")
+print(y_resampled.value_counts())
+
+print("SMOTE applied, and classes balanced. X_resampled and y_resampled created.")
+
+"""## Correlation Analysis
+
+Compute and visualize the correlation matrix for numerical features and the 'Is_Churned' target variable to identify relationships between them.
+
+"""
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# 1. Select numerical columns and convert 'Is_Churned' to integer
+# Exclude 'Customer_ID' as it's an identifier, not a numerical feature for correlation
+numerical_cols = df.select_dtypes(include=np.number).columns.tolist()
+
+# Ensure 'Is_Churned' is treated as a numerical column (0 or 1)
+df_correlation = df[numerical_cols].copy()
+df_correlation['Is_Churned'] = df['Is_Churned'].astype(int)
+
+# 2. Calculate the correlation matrix
+correlation_matrix = df_correlation.corr()
+
+# 3. Create a heatmap of the correlation matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title('Correlation Matrix of Numerical Features and Churn Status')
+plt.show()
+
+print("Generated a correlation matrix heatmap for numerical features and churn status.")
+
+"""## Crosstabs & Chi-Square Tests
+
+Create crosstabulations between categorical features and the 'Is_Churned' target, and perform Chi-Square tests to assess statistical associations.
+
+"""
+
+import pandas as pd
+from scipy.stats import chi2_contingency
+
+# Exclude specified columns from categorical analysis
+excluded_cols = ['Customer_ID', 'Name', 'Email', 'City', 'Country', 'Date_of_Purchase']
+
+# Identify categorical columns to analyze (excluding numerical and excluded_cols)
+categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+categorical_cols = [col for col in categorical_cols if col not in excluded_cols]
+
+print("Performing Chi-Square tests for categorical features vs. 'Is_Churned':\n")
+
+for col in categorical_cols:
+    print(f"--- Analyzing '{col}' ---")
+
+    # Create crosstabulation
+    crosstab_table = pd.crosstab(df[col], df['Is_Churned'])
+    print("Crosstabulation:")
+    print(crosstab_table)
+
+    # Perform Chi-Square test
+    chi2, p_value, dof, expected = chi2_contingency(crosstab_table)
+
+    print(f"\nChi-Square Statistic: {chi2:.2f}")
+    print(f"P-value: {p_value:.3f}")
+    print(f"Degrees of Freedom: {dof}")
+
+    # Interpret p-value
+    if p_value < 0.05:
+        print(f"Interpretation: The p-value ({p_value:.3f}) is less than 0.05, indicating a statistically significant association between '{col}' and 'Is_Churned'.\n")
+    else:
+        print(f"Interpretation: The p-value ({p_value:.3f}) is greater than or equal to 0.05, indicating no statistically significant association between '{col}' and 'Is_Churned'.\n")
+    print("="*70 + "\n")
+
+print("Chi-Square tests completed for all relevant categorical features.")
+
+"""## Cluster Analysis
+
+
+Perform customer segmentation using a clustering algorithm (e.g., K-Means) on relevant features, including feature scaling and optimal cluster determination.
+
+"""
+
+from sklearn.preprocessing import StandardScaler
+
+# Initialize the StandardScaler
+scaler = StandardScaler()
+
+# Scale the features in X
+X_scaled = scaler.fit_transform(X)
+
+print("Features successfully scaled using StandardScaler. X_scaled created.")
+print(f"Shape of X_scaled: {X_scaled.shape}")
+
+from sklearn.cluster import KMeans
+
+wcss = []
+# Calculate WCSS for a range of cluster numbers
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42, n_init='auto')
+    kmeans.fit(X_scaled)
+    wcss.append(kmeans.inertia_)
+
+print("WCSS values calculated for a range of cluster numbers.")
+
+import matplotlib.pyplot as plt
+
+# Plot the Elbow Method graph
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, 11), wcss, marker='o', linestyle='--')
+plt.title('Elbow Method for Optimal Number of Clusters')
+plt.xlabel('Number of Clusters')
+plt.ylabel('WCSS (Within-Cluster Sum of Squares)')
+plt.grid(True)
+plt.show()
+
+print("Elbow Method plot generated to determine optimal number of clusters.")
+
+from sklearn.cluster import KMeans
+
+# Choose the optimal number of clusters based on the Elbow Method plot
+# For demonstration, let's assume 3 is the optimal number of clusters from the plot.
+optimal_clusters = 3
+
+# Instantiate and fit the K-Means model with the optimal number of clusters
+kmeans_model = KMeans(n_clusters=optimal_clusters, init='k-means++', random_state=42, n_init='auto')
+kmeans_model.fit(X_scaled)
+
+# Get the cluster labels
+cluster_labels = kmeans_model.labels_
+
+print(f"K-Means model fitted with {optimal_clusters} clusters. Cluster labels generated.")
+
+df['Cluster'] = cluster_labels
+
+print("Cluster labels successfully added to the DataFrame as a new column 'Cluster'.")
+print(df.head())
+
+"""## Linear Regression
+
+### Subtask:
+Build and evaluate a Linear Regression model to predict 'Purchase_Amount' based on selected features.
+
+"""
+
+import pandas as pd
+
+# Assuming df is your DataFrame containing the customer data
+df = pd.read_csv('retaildata.csv')
+
+# Descriptive statistics for numerical columns
+descriptive_stats = df[['Age', 'Purchase_Amount', 'Satisfaction_Score']].describe()
+print(descriptive_stats)
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Compute correlation matrix
+corr_matrix = df[['Age', 'Purchase_Amount', 'Satisfaction_Score']].corr()
+
+# Plot heatmap for correlation matrix
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix')
+plt.show()
+
+corr_matrix
+
+import pandas as pd
+from scipy.stats import chi2_contingency
+
+# Ensure df is properly initialized with 'Is_Churned' column
+df = pd.read_csv(.csv')
+df['Date_of_Purchase'] = pd.to_datetime(df['Date_of_Purchase'], format='%d/%m/%Y')
+
+latest_purchase_date = df['Date_of_Purchase'].max()
+churn_threshold_days = 90 # Define churn as no purchase in the last 90 days
+churn_cutoff_date = latest_purchase_date - pd.Timedelta(days=churn_threshold_days)
+df['Is_Churned'] = df['Date_of_Purchase'] < churn_cutoff_date
+
+# Create a crosstab between Gender and Is_Churned
+crosstab = pd.crosstab(df['Gender'], df['Is_Churned'])
+print(crosstab)
+
+# Chi-Square test
+chi2, p, dof, expected = chi2_contingency(crosstab)
+print(f"Chi-Square Statistic: {chi2}")
+print(f"P-Value: {p}")
+
+# Check the first few rows of the dataset
+print(df.head())
+
+# Check the data types and missing values
+print(df.info())
+
+# Summary statistics of numerical columns
+print(df.describe())
+
+# Check for missing values
+print(df.isnull().sum())
+
+datas=df.isnull().sum()
+
+dt= datas.dropna()
+
+dt
+
+dt.info()
+
+df.duplicated().sum()
